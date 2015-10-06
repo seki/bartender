@@ -1,5 +1,32 @@
 require 'bartender/bartender'
 
+class Rdv
+  def initialize
+    @reader = []
+    @queue = []
+  end
+
+  def push(it)
+    if @reader.empty?
+      @queue << [it, Fiber.current]
+      return Fiber.yield
+    end
+
+    @reader.shift.resume(it)
+  end
+
+  def pop
+    if @queue.empty?
+      @reader << Fiber.current
+      return Fiber.yield
+    end
+
+    value, fiber = @queue.shift
+    fiber.resume
+    return value
+  end
+end
+
 module DRb
   class DRbUnknown
     def initialize(err, buf)
@@ -14,11 +41,18 @@ end
 
 class DRbEchoServer
   def initialize(bartender, port)
+    @rdv = Rdv.new
     Bartender::Server.new(bartender, port) do |reader, writer|
       begin
         while true
           _, msg, argv = req_drb(reader)
-          reply_drb(writer, true, [msg, argv])
+          if msg == "push"
+            @rdv.push(argv)
+            value = nil
+          else
+            value = @rdv.pop
+          end
+          reply_drb(writer, true, value)
         end
       rescue
         p $!
@@ -60,4 +94,3 @@ end
 DRbEchoServer.new(Bartender.primary, 12345)
 Bartender.primary.run
 
-      
