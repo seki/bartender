@@ -1,10 +1,9 @@
 require 'bartender/bartender'
-require 'socket'
 
 class ThreadTask
   def initialize(bartender, *args, &block)
     @bartender = bartender
-    @pair = UNIXSocket.pair
+    @pair = IO.pipe
     @value = nil
     Thread.new do 
       begin
