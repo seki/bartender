@@ -27,23 +27,26 @@ class ThreadTask
   end
 end
 
-fiber = Fiber.new do
-  tt = ThreadTask.new(Bartender.primary) {sleep 1; 'hello'}
-  p tt.join
+if __FILE__ == $0
+  Fiber.new do
+    tt = ThreadTask.new(Bartender.primary) {sleep 2; 'hello 2'}
+    p tt.join
+  end.resume
+
+  Fiber.new do
+    tt = ThreadTask.new(Bartender.primary) {sleep 3; 'hello 3'}
+    p tt.join
+  end.resume
+
+  Fiber.new do
+    tt = ThreadTask.new(Bartender.primary) {raise('hello 0')}
+    (tt.join rescue $!).tap {|it| p it}
+  end.resume
+
+  Fiber.new do
+    tt = ThreadTask.new(Bartender.primary) {sleep 1; 'hello 1'}
+    p tt.join
+  end.resume
+
+  Bartender.primary.run
 end
-fiber.resume
-fiber = Fiber.new do
-  tt = ThreadTask.new(Bartender.primary) {sleep 2; 'hello 2'}
-  p tt.join
-end
-fiber.resume
-fiber = Fiber.new do
-  tt = ThreadTask.new(Bartender.primary) {sleep 3; 'hello 3'}
-  p tt.join
-end
-fiber.resume
-
-Bartender.primary.run
-
-
-
