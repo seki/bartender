@@ -27,9 +27,19 @@ module Bartender
     end
     
     def step(timeout=nil)
+      remove_closed(@input)
+      remove_closed(@output)
       r, w = IO.select(@input.keys, @output.keys, [], timeout)
       r.each {|fd| @input[fd].call }
       w.each {|fd| @output[fd].call }
+    end
+
+    def remove_closed(hash)
+      closed = []
+      hash.keys do |fd|
+        closed << hash.delete(fd) if fd.closed?
+      end
+      closed.each {|cb| cb.call}
     end
 
     def event_map(event)
@@ -51,6 +61,13 @@ module Bartender
     def delete(event, fd)
       event_map(event).delete(fd)
     end
+
+    def select_io(event, fd)
+      self[event, fd] = Fiber.current.method(:resume)
+      Fiber.yield
+    ensure
+      self.delete(event, fd)
+    end
   end
 
   @app = App.new
@@ -65,10 +82,7 @@ module Bartender
     end
 
     def select_writable
-      @bartender[:write, @fd] = Fiber.current.method(:resume)
-      Fiber.yield
-    ensure
-      @bartender.delete(:write, @fd)
+      @bartender.select_io(:write, @fd)
     end
 
     def _write(buf)
@@ -143,10 +157,7 @@ module Bartender
     end
     
     def select_readable
-      @bartender[:read, @fd] = Fiber.current.method(:resume)
-      Fiber.yield
-    ensure
-      @bartender.delete(:read, @fd)
+      @bartender.select_io(:read, @fd)
     end
   end
 
