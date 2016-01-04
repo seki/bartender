@@ -27,19 +27,9 @@ module Bartender
     end
     
     def step(timeout=nil)
-      remove_closed(@input)
-      remove_closed(@output)
       r, w = IO.select(@input.keys, @output.keys, [], timeout)
       r.each {|fd| @input[fd].call }
       w.each {|fd| @output[fd].call }
-    end
-
-    def remove_closed(hash)
-      closed = []
-      hash.keys do |fd|
-        closed << hash.delete(fd) if fd.closed?
-      end
-      closed.each {|cb| cb.call}
     end
 
     def event_map(event)
