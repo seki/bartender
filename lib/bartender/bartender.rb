@@ -58,6 +58,23 @@ module Bartender
     ensure
       self.delete(event, fd)
     end
+
+    def select_readable(fd); select_io(:read, fd); end
+    def select_writable(fd); select_io(:write, fd); end
+
+    def _read(fd, sz)
+      return fd.read_nonblock(sz)
+    rescue IO::WaitReadable
+      select_readable(fd)
+      retry
+    end
+
+    def _write(fd, buf)
+      return fd.write_nonblock(buf)
+    rescue IO::WaitWritable
+      select_writable(fd)
+      retry
+    end
   end
 
   @app = App.new
@@ -71,21 +88,14 @@ module Bartender
       @pool = []
     end
 
-    def select_writable
-      @bartender.select_io(:write, @fd)
-    end
-
-    def _write(buf)
-      return @fd.write_nonblock(buf)
-    rescue IO::WaitWritable
-      select_writable
-      retry
-    end
-
-    def write(buf)
+    def write(buf, buffered=false)
       push(buf)
+      flush unless buffered
+    end
+
+    def flush
       until @pool.empty?
-        len = _write(@pool[0])
+        len = @bartender._write(@fd, @pool[0])
         pop(len)
       end
     end
@@ -120,7 +130,7 @@ module Bartender
 
     def read(n)
       while @buf.bytesize < n
-        chunk = _read(n)
+        chunk = @bartender._read(@fd, n)
         break if chunk.nil? || chunk.empty?
         @buf += chunk
       end
@@ -129,25 +139,13 @@ module Bartender
 
     def read_until(sep="\r\n", chunk_size=8192)
       until (index = @buf.index(sep))
-        @buf += _read(chunk_size)
+        @buf += @bartender._read(@fd, chunk_size)
       end
       @buf.slice!(0, index+sep.bytesize)
     end
 
     def readln
       read_until("\n")
-    end
-
-    private
-    def _read(n)
-      @fd.read_nonblock(n)
-    rescue IO::WaitReadable
-      select_readable
-      retry
-    end
-    
-    def select_readable
-      @bartender.select_io(:read, @fd)
     end
   end
 
@@ -183,10 +181,8 @@ module Bartender
     end
 
     def on_accept(client)
-      reader = Reader.new(@bartender, client)
-      writer = Writer.new(@bartender, client)
       Fiber.new do
-        @blk.yield(reader, writer)
+        @blk.yield(client)
       end.resume
     end
   end

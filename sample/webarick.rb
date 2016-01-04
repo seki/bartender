@@ -3,11 +3,11 @@ require 'webrick/httpserver'
 
 module WEBrick
   class GenericServer
-    def start_fiber(bartender=Bartender.primary, &block)
+    def start(&block)
       raise ServerError, "already started." if @status != :Stop
       server_type = @config[:ServerType] || SimpleServer
 
-      @bartender = bartender
+      @bartender = Bartender.primary
 
       setup_shutdown_pipe
 
@@ -35,6 +35,7 @@ module WEBrick
               end
             end
           end
+          @bartender.run
         ensure
           do_shutdown
         end
@@ -42,7 +43,7 @@ module WEBrick
     end
 
     def do_shutdown
-      cleanup_shutdown_pipe(shutdown_pipe)
+      cleanup_shutdown_pipe(@shutdown_pipe)
       cleanup_listener
       @status = :Shutdown
       @logger.info "going to shutdown ..."
@@ -61,25 +62,25 @@ module WEBrick
           raise
         end
         call_callback(:AcceptCallback, sock)
-        reader = Bartender::Reader.new(@bartender, sock)
-        writer = Bartender::Writer.new(@bartender, sock)
         Fiber.new do
-          block ? block.call(reader, writer) : run(reader, writer)
+          begin
+            block ? block.call(sock) : run(sock)
+          rescue Errno::ENOTCONN
+            @logger.debug "Errno::ENOTCONN raised"
+          rescue ServerError => ex
+            msg = "#{ex.class}: #{ex.message}\n\t#{ex.backtrace[0]}"
+            @logger.error msg
+          rescue Exception => ex
+            @logger.error ex
+          ensure
+            if addr
+              @logger.debug "close: #{addr[3]}:#{addr[1]}"
+            else
+              @logger.debug "close: <address unknown>"
+            end
+            sock.close unless sock.closed?
+          end
         end.resume
-      rescue Errno::ENOTCONN
-        @logger.debug "Errno::ENOTCONN raised"
-      rescue ServerError => ex
-        msg = "#{ex.class}: #{ex.message}\n\t#{ex.backtrace[0]}"
-        @logger.error msg
-      rescue Exception => ex
-        @logger.error ex
-      ensure
-        if addr
-          @logger.debug "close: #{addr[3]}:#{addr[1]}"
-        else
-          @logger.debug "close: <address unknown>"
-        end
-        sock.close unless sock.closed?
       end
     end
   end
@@ -94,7 +95,6 @@ module WEBrick
         server = self
         begin
           raise HTTPStatus::EOFError if @status != :Running
-          raise HTTPStatus::EOFError if sock.eof?
           req.parse(sock)
           res.request_method = req.request_method
           res.request_uri = req.request_uri
@@ -140,7 +140,7 @@ module WEBrick
   class HTTPRequest
     def read_line(io, size=4096)
       @reader ||= Bartender::Reader.new(Bartender.primary, io)
-      @reader.read_until(LF, size)
+      @reader.read_until(LF, size) 
     end
 
     def read_data(io, size)
@@ -157,6 +157,9 @@ module WEBrick
   end
 end
 
-server = WEBrick::HTTPServer.new({:BindAddress => '127.0.0.1',
+if __FILE__ == $0
+  server = WEBrick::HTTPServer.new({:BindAddress => 'localhost',
                                    :Port => 10080})
-server.start
+  server.start
+end
+
