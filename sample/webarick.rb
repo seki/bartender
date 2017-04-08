@@ -7,7 +7,7 @@ module WEBrick
       raise ServerError, "already started." if @status != :Stop
       server_type = @config[:ServerType] || SimpleServer
 
-      @bartender = Bartender.primary
+      @bartender = Bartender.context
 
       setup_shutdown_pipe
 
@@ -139,19 +139,19 @@ end
 module WEBrick
   class HTTPRequest
     def read_line(io, size=4096)
-      @reader ||= Bartender::Reader.new(Bartender.primary, io)
+      @reader ||= Bartender::Reader.new(io)
       @reader.read_until(LF, size) 
     end
 
     def read_data(io, size)
-      @reader ||= Bartender::Reader.new(Bartender.primary, io)
+      @reader ||= Bartender::Reader.new(io)
       @reader.read(size)
     end
   end
 
   class HTTPResponse
     def _write_data(socket, data)
-      @writer ||= Bartender::Writer.new(Bartender.primary, socket)
+      @writer ||= Bartender::Writer.new(socket)
       @writer.write(data)
     end
   end

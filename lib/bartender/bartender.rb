@@ -3,7 +3,7 @@ require 'socket'
 require 'fiber'
 
 module Bartender
-  class App
+  class Context
     def initialize
       @input = {}
       @output = {}
@@ -77,13 +77,21 @@ module Bartender
     end
   end
 
-  @app = App.new
   module_function
-  def primary; @app; end
+  def context
+    it = Thread.current.thread_variable_get(:bartender)
+    return it if it
+    Thread.current.thread_variable_set(:bartender, Context.new)
+  end
+  def run; context.run; end
+  def select_readable(fd); context.select_readable(fd); end
+  def select_writable(fd); context.select_writable(fd); end
+  def _read(fd, sz); context._read(fd, sz); end
+  def _write(fd, buf); context._write(fd, buf); end
 
   class Writer
-    def initialize(bartender, fd)
-      @bartender = bartender
+    def initialize(fd)
+      @bartender = Bartender.context
       @fd = fd
       @pool = []
     end
@@ -122,8 +130,8 @@ module Bartender
   end
 
   class Reader
-    def initialize(bartender, fd)
-      @bartender = bartender
+    def initialize(fd)
+      @bartender = Bartender.context
       @buf = ''
       @fd = fd
     end
@@ -150,13 +158,13 @@ module Bartender
   end
 
   class Server
-    def initialize(bartender, addr_or_port, port=nil, &blk)
+    def initialize(addr_or_port, port=nil, &blk)
       if port
         address = addr_or_port
       else
         address, port = nil, addr_or_port
       end
-      @bartender = bartender
+      @bartender = Bartender.context
       create_listeners(address, port).each do |soc|
         @bartender[:read, soc] = Proc.new do
           client = soc.accept

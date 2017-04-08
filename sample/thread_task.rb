@@ -1,52 +1,46 @@
 require 'bartender/bartender'
 
 class ThreadTask
-  def initialize(bartender, *args, &block)
-    @bartender = bartender
+  def initialize(*args, &block)
     @pair = IO.pipe
-    @value = nil
-    Thread.new do 
+    @task = Thread.new do 
       begin
-        @value = [true, block.call(*args)]
-      rescue
-        @value = [false, $!]
+        block.call(*args)
       ensure
         @pair[0].close
       end
     end
   end
 
-  def join
-    @bartender[:read, @pair[1]] = Fiber.current.method(:resume)
-    Fiber.yield
-    @value[0] ? @value[1] : raise(@value[1])
+  def value
+    Bartender.select_readable(@pair[1]) if @pair
+    @task.value
   ensure
-    @bartender.delete(:read, @pair[1])
-    @pair[1].close
+    @pair[1].close if @pair
     @pair = nil
   end
 end
 
 if __FILE__ == $0
   Fiber.new do
-    tt = ThreadTask.new(Bartender.primary) {sleep 2; 'hello 2'}
-    p tt.join
+    tt = ThreadTask.new {sleep 2; 'hello 2'}
+    p tt.value
   end.resume
 
   Fiber.new do
-    tt = ThreadTask.new(Bartender.primary) {sleep 3; 'hello 3'}
-    p tt.join
+    tt = ThreadTask.new {sleep 3; 'hello 3'}
+    p tt.value
   end.resume
 
   Fiber.new do
-    tt = ThreadTask.new(Bartender.primary) {raise('hello 0')}
-    (tt.join rescue $!).tap {|it| p it}
+    tt = ThreadTask.new {raise('hello 0')}
+    (tt.value rescue $!).tap {|it| p it}
   end.resume
 
   Fiber.new do
-    tt = ThreadTask.new(Bartender.primary) {sleep 1; 'hello 1'}
-    p tt.join
+    tt = ThreadTask.new {sleep 1; 'hello 1'}
+    p tt.value
   end.resume
 
-  Bartender.primary.run
+  Bartender.run
 end
