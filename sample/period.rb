@@ -28,30 +28,28 @@ class Rdv
 end
 
 if __FILE__ == $0
-  require 'thread_task'
-
   rdv = Rdv.new
 
   Fiber.new do
-    tt = ThreadTask.new {sleep 2; 'hello 2'}
+    tt = Bartender::ThreadTask.new {sleep 2; 'hello 2'}
     rdv.push(tt.value)
     p 2
   end.resume
 
   Fiber.new do
-    tt = ThreadTask.new {sleep 3; 'hello 3'}
+    tt = Bartender::ThreadTask.new {sleep 3; 'hello 3'}
     rdv.push(tt.value)
     p 3
   end.resume
 
   Fiber.new do
-    tt = ThreadTask.new {raise('hello 0')}
+    tt = Bartender::ThreadTask.new {raise('hello 0')}
     (tt.value rescue $!).tap {|it| rdv.push(it)}
     p 0
   end.resume
 
   Fiber.new do
-    tt = ThreadTask.new {sleep 1; 'hello 1'}
+    tt = Bartender::ThreadTask.new {sleep 1; 'hello 1'}
     rdv.push(tt.value)
     p 1
   end.resume

@@ -74,27 +74,27 @@ module Bartender
       event_map(event).delete(fd)
     end
 
-    def select_io(event, fd)
+    def wait_io(event, fd)
       self[event, fd] = Fiber.current.method(:resume)
       Fiber.yield
     ensure
       self.delete(event, fd)
     end
 
-    def select_readable(fd); select_io(:read, fd); end
-    def select_writable(fd); select_io(:write, fd); end
+    def wait_readable(fd); wait_io(:read, fd); end
+    def wait_writable(fd); wait_io(:write, fd); end
 
     def _read(fd, sz)
       return fd.read_nonblock(sz)
     rescue IO::WaitReadable
-      select_readable(fd)
+      wait_readable(fd)
       retry
     end
 
     def _write(fd, buf)
       return fd.write_nonblock(buf)
     rescue IO::WaitWritable
-      select_writable(fd)
+      wait_writable(fd)
       retry
     end
   end
@@ -106,8 +106,8 @@ module Bartender
     Thread.current.thread_variable_set(:bartender, Context.new)
   end
   def run; context.run; end
-  def select_readable(fd); context.select_readable(fd); end
-  def select_writable(fd); context.select_writable(fd); end
+  def wait_readable(fd); context.wait_readable(fd); end
+  def wait_writable(fd); context.wait_writable(fd); end
   def sleep(sec); context.sleep(sec); end
   def _read(fd, sz); context._read(fd, sz); end
   def _write(fd, buf); context._write(fd, buf); end
@@ -215,6 +215,29 @@ module Bartender
       Fiber.new do
         @blk.yield(client)
       end.resume
+    end
+  end
+
+  class ThreadTask
+    def initialize(*args, &block)
+      @left, @right = IO.pipe
+      @task = Thread.new do 
+        begin
+          block.call(*args)
+        ensure
+          @left.close
+        end
+      end
+    end
+    
+    def value
+      if @right
+        Bartender.wait_readable(@right)
+        @right.close
+      end
+      @task.value
+    ensure
+      @right = nil
     end
   end
 end

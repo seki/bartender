@@ -43,6 +43,7 @@ module WEBrick
     end
 
     def do_shutdown
+      @bartender.stop
       cleanup_shutdown_pipe(@shutdown_pipe)
       cleanup_listener
       @status = :Shutdown
