@@ -7,6 +7,7 @@ module Bartender
     def initialize
       @input = {}
       @output = {}
+      @alarm = []
       @running = false
     end
 
@@ -23,13 +24,19 @@ module Bartender
     end
 
     def empty?
-      @input.empty? && @output.empty?
+      @input.empty? && @output.empty? && @alarm.empty?
     end
     
-    def step(timeout=nil)
+    def step
       r, w = IO.select(@input.keys, @output.keys, [], timeout)
-      r.each {|fd| @input[fd].call }
-      w.each {|fd| @output[fd].call }
+      if r.nil?
+        now = Time.now
+        expired, @alarm = @alarm.partition {|x| x[0] < now}
+        expired.each {|x| x[1].call}
+      else
+        r.each {|fd| @input[fd].call }
+        w.each {|fd| @output[fd].call }
+      end
     end
 
     def event_map(event)
@@ -43,6 +50,21 @@ module Bartender
       end
     end
 
+    def alarm(time, callback)
+      @alarm << [time, callback]
+      @alarm = @alarm.sort_by {|x| x[0]}
+    end
+    
+    def sleep(sec)
+      alarm(Time.now + sec, Fiber.current.method(:resume))
+      Fiber.yield
+    end
+
+    def timeout
+      return nil if @alarm.empty?
+      [@alarm[0][0] - Time.now, 0].max
+    end
+    
     def []=(event, fd, callback)
       return delete(event, fd) unless callback
       event_map(event)[fd] = callback
@@ -86,6 +108,7 @@ module Bartender
   def run; context.run; end
   def select_readable(fd); context.select_readable(fd); end
   def select_writable(fd); context.select_writable(fd); end
+  def sleep(sec); context.sleep(sec); end
   def _read(fd, sz); context._read(fd, sz); end
   def _write(fd, buf); context._write(fd, buf); end
 
