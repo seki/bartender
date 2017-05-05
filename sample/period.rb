@@ -75,6 +75,11 @@ if __FILE__ == $0
     end
   end.resume
 
+  Fiber.new do
+    p Bartender.context.wait_io_timeout(:read, $stdin, 2.5)
+    p :stdin
+  end.resume
+
   bartender = Bartender.context
   entry = bartender.alarm(Time.now + 3, bartender.method(:stop))
   bartender.delete_alarm(entry)

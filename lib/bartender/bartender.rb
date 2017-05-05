@@ -84,7 +84,17 @@ module Bartender
       self[event, fd] = Fiber.current.method(:resume)
       Fiber.yield
     ensure
-      self.delete(event, fd)
+      delete(event, fd)
+    end
+
+    def wait_io_timeout(event, fd, timeout)
+      method = Fiber.current.method(:resume)
+      entry = alarm(Time.now + timeout, Proc.new {method.call(:timeout)})
+      self[event, fd] = method
+      Fiber.yield
+    ensure
+      delete(event, fd)
+      delete_alarm(entry)
     end
 
     def wait_readable(fd); wait_io(:read, fd); end
