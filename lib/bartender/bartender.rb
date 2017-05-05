@@ -51,8 +51,14 @@ module Bartender
     end
 
     def alarm(time, callback)
-      @alarm << [time, callback]
+      entry = [time, callback]
+      @alarm << entry
       @alarm = @alarm.sort_by {|x| x[0]}
+      entry
+    end
+
+    def delete_alarm(entry)
+      @alarm.delete(entry)
     end
     
     def sleep(sec)

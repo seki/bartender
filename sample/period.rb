@@ -75,7 +75,10 @@ if __FILE__ == $0
     end
   end.resume
 
-  Bartender.context.alarm(Time.now + 6, Bartender.context.method(:stop))
+  bartender = Bartender.context
+  entry = bartender.alarm(Time.now + 3, bartender.method(:stop))
+  bartender.delete_alarm(entry)
+  bartender.alarm(Time.now + 7, bartender.method(:stop))
   
   Bartender.run
 end
