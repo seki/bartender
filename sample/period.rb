@@ -31,6 +31,11 @@ if __FILE__ == $0
   rdv = Rdv.new
 
   Fiber.new do
+    rdv.push(-1)
+    p [:push, -1]
+  end.resume
+  
+  Fiber.new do
     tt = Bartender::ThreadTask.new {sleep 2; 'hello 2'}
     rdv.push(tt.value)
     p 2
@@ -55,6 +60,8 @@ if __FILE__ == $0
   end.resume
 
   Fiber.new do
+    sleep 0.5
+    p rdv.pop
     p rdv.pop
     p rdv.pop
     p rdv.pop
@@ -76,8 +83,12 @@ if __FILE__ == $0
   end.resume
 
   Fiber.new do
-    p Bartender.context.wait_io_timeout(:read, $stdin, 2.5)
-    p :stdin
+    begin
+      p Bartender.context.wait_io_timeout(:read, $stdin, 2.5)
+      p :stdin
+    rescue Bartender::TimeoutError
+      p :timeouted
+    end
   end.resume
 
   bartender = Bartender.context
