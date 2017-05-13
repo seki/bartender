@@ -2,6 +2,7 @@
 require 'bartender/context'
 
 module Bartender
+  
   class Writer
     def initialize(fd)
       @bartender = Bartender.context
@@ -110,12 +111,12 @@ module Bartender
 
   class ThreadTask
     def initialize(*args, &block)
-      @left, @right = IO.pipe
+      left, @right = IO.pipe
       @task = Thread.new do 
         begin
           block.call(*args)
         ensure
-          @left.close
+          left.close
         end
       end
     end
@@ -129,5 +130,26 @@ module Bartender
     ensure
       @right = nil
     end
+  end
+
+
+  module_function
+  def context
+    it = Thread.current.thread_variable_get(:bartender)
+    return it if it
+    Thread.current.thread_variable_set(:bartender, Context.new)
+  end
+
+  def self.define_context_method(*list);
+    list.each do |m|
+      define_method(m) {|*arg| context.send(m, *arg)}
+      module_function(m)
+    end
+  end
+  define_context_method(:run, :sleep,
+                        :wait_readable, :wait_writable,
+                        :_read, :_write)
+  def task(&blk)
+    ThreadTask.new(&blk)
   end
 end

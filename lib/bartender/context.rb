@@ -114,21 +114,4 @@ module Bartender
       retry
     end
   end
-
-  module_function
-  def context
-    it = Thread.current.thread_variable_get(:bartender)
-    return it if it
-    Thread.current.thread_variable_set(:bartender, Context.new)
-  end
-
-  def self.define_context_method(*list);
-    list.each do |m|
-      define_method(m) {|*arg| context.send(m, *arg)}
-      module_function(m)
-    end
-  end
-  define_context_method(:run, :sleep,
-                        :wait_readable, :wait_writable,
-                        :_read, :_write)
 end
