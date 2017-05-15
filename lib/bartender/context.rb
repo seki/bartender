@@ -41,9 +41,9 @@ module Bartender
 
     def event_map(event)
       case event
-      when :read
+      when :read, :wait_readable, IO::WaitReadable
         @input
-      when :write
+      when :write, :wait_writable, IO::WaitWritable
         @output
       else
         raise 'invalid event'
