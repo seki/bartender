@@ -51,8 +51,10 @@ class DRbEchoServer
           case msg
           when 'push'
             value = @rdv.push(argv)
-          else
+          when 'pop'
             value = @rdv.pop
+          else
+            value = msg
           end
           reply_drb(writer, true, value)
         end
