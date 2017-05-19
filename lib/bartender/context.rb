@@ -28,7 +28,7 @@ module Bartender
     end
     
     def step
-      r, w = IO.select(@input.keys, @output.keys, [], timeout)
+      r, w = IO.select(@input.keys, @output.keys, [], next_alarm)
       if r.nil?
         now = Time.now
         expired, @alarm = @alarm.partition {|x| x[0] < now}
@@ -60,13 +60,18 @@ module Bartender
     def delete_alarm(entry)
       @alarm.delete(entry)
     end
+
+    def to_time(it)
+      return it if it.is_a? Time
+      Time.now + it
+    end
     
-    def sleep(sec)
-      alarm(Time.now + sec, Fiber.current.method(:resume))
+    def sleep(timeout)
+      alarm(to_time(timeout), Fiber.current.method(:resume))
       Fiber.yield
     end
 
-    def timeout
+    def next_alarm
       return nil if @alarm.empty?
       [@alarm[0][0] - Time.now, 0].max
     end
@@ -80,37 +85,33 @@ module Bartender
       event_map(event).delete(fd)
     end
 
-    def wait_io(event, fd)
-      self[event, fd] = Fiber.current.method(:resume)
-      Fiber.yield
-    ensure
-      delete(event, fd)
-    end
-
-    def wait_io_timeout(event, fd, timeout)
+    def wait_io(event, fd, timeout=nil)
       method = Fiber.current.method(:resume)
-      entry = alarm(Time.now + timeout, Proc.new {method.call(:timeout)})
+      if timeout
+        time = to_time(timeout)
+        entry = alarm(time, Proc.new {method.call(:timeout)})
+      end
       self[event, fd] = method
       raise(TimeoutError) if Fiber.yield == :timeout
     ensure
       delete(event, fd)
-      delete_alarm(entry)
+      delete_alarm(entry) if timeout
     end
 
-    def wait_readable(fd); wait_io(:read, fd); end
-    def wait_writable(fd); wait_io(:write, fd); end
+    def wait_readable(fd, timeout=nil); wait_io(:read, fd, timeout); end
+    def wait_writable(fd, timeout=nil); wait_io(:write, fd, timeout); end
 
-    def _read(fd, sz)
+    def _read(fd, sz, timeout=nil)
       return fd.read_nonblock(sz)
     rescue IO::WaitReadable
-      wait_readable(fd)
+      wait_readable(fd, timeout)
       retry
     end
 
-    def _write(fd, buf)
+    def _write(fd, buf, timeout=nil)
       return fd.write_nonblock(buf)
     rescue IO::WaitWritable
-      wait_writable(fd)
+      wait_writable(fd, timeout)
       retry
     end
   end
