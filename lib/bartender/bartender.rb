@@ -152,4 +152,20 @@ module Bartender
   def task(&blk)
     ThreadTask.new(&blk)
   end
+
+  def tcp_socket(host, port)
+    addr = Socket.sockaddr_in(port, host)
+    s = Socket.new(Socket::AF_INET, Socket::SOCK_STREAM, 0)
+
+    begin
+      s.connect_nonblock(addr)
+    rescue IO::WaitWritable
+      p :waiting
+      wait_writable(s)
+      retry
+    rescue Errno::EISCONN
+      p :isconn
+      return s
+    end
+  end
 end
