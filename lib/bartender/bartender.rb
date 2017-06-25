@@ -160,11 +160,9 @@ module Bartender
     begin
       s.connect_nonblock(addr)
     rescue IO::WaitWritable
-      p :waiting
       wait_writable(s)
       retry
     rescue Errno::EISCONN
-      p :isconn
       return s
     end
   end
